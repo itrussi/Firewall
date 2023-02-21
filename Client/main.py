@@ -5,6 +5,7 @@ import textwrap
 from dataclasses import dataclass
 import logging
 import threading
+from url_scan import check
 
 @dataclass
 class port_info:
@@ -48,6 +49,19 @@ class network_tools:
             s.close()
 
         return self.ports
+
+    def monitor(self, target):
+        try:
+            url = socket.gethostbyaddr(target)
+            safe = check(url[1])
+        except:
+            pass
+
+        if safe == False:
+            print("Flag")
+
+        else:
+            print("Safe")
 
 class Packet_Sniffer:
 
