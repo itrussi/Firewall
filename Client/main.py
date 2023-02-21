@@ -139,27 +139,6 @@ class Client:
     def __init__(self):
         pass
 
-class Firewall:
-
-    def __init__(self):
-
-        logging.basicConfig(
-            filename='./Logs/main.log',
-            level=logging.INFO,
-            format=
-            '%(asctime)s — %(name)s — %(levelname)s — %(funcName)s:%(lineno)d — %(message)s'
-        )
-        
-        self.logger = logging.getLogger(__name__)
-
-        self.network_tools = network_tools()
-        self.localports = self.network_tools.scanner("0.0.0.0")
-        self.monitoring = threading.Thread(target=Packet_Sniffer(), args=(self.localports,))
-        self.monitoring.start()
-
-        self.UI = threading.Thread(target=self.handler(), args=())
-        self.UI.start()
-
     def handler(self):
         while True:
             command = input(">>> ")
@@ -190,10 +169,27 @@ class Firewall:
                 
             elif "Stop Monitoring Port" in command:
                 print("Stop Monitoring Port")
+
+class Firewall:
+
+    def __init__(self):
+
+        logging.basicConfig(
+            filename='./Logs/main.log',
+            level=logging.INFO,
+            format=
+            '%(asctime)s — %(name)s — %(levelname)s — %(funcName)s:%(lineno)d — %(message)s'
+        )
+        
+        self.logger = logging.getLogger(__name__)
+
+        self.network_tools = network_tools()
+        self.localports = self.network_tools.scanner("0.0.0.0")
+        self.monitoring = threading.Thread(target=Packet_Sniffer(), args=(self.localports,))
+        self.monitoring.start()
+
+        self.UI = threading.Thread(target=Client, args=())
+        self.UI.start()
                 
 if __name__ == "__main__":
-    test = network_tools()
-    result = test.scanner("0.0.0.0")
-    for port in result:
-        if port.port_number == 22:
-            print(port.port_number)
+    Firewall()
