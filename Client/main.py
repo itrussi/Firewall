@@ -1,34 +1,52 @@
 import scapy.all as scapy
 import socket
-import sys
 from dataclasses import dataclass
 
 @dataclass
 class port_info:
-    port: int
-    reason: str
+    port: int = None
+    reason: str = None
     montor: bool = False
     block: bool = False
 
 @dataclass
 class ip_info:
-    ip: str
-    reason: str
+    ip: str = None
+    reason: str = None
     montor: bool = False
     block: bool = False
 
-class port_scanner:
+@dataclass
+class url_info:
+    url: str = None
+    reason: str = None
+    montor: bool = False
+    block: bool = False
 
-    def __init__(self, target):
+class scanner:
 
-        # target = socket.gethostbyname(sys.argv[1])
+    def __init__(self):
+        pass
+
+    def ports(self, target):
+        
+        ports = []
         
         for port in range(1,65535):
             s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             socket.setdefaulttimeout(1)
              
             # returns an error indicator
-            result = s.connect_ex((target,port))
-            if result ==0:
-                print("Port {} is open".format(port))
+            result = s.connect_ex((target, port))
+            if result == 0:
+                port = port_info(port, None)
+                ports.append(port)
             s.close()
+
+        return ports
+
+        
+if __name__ == "__main__":
+    test = scanner()
+    result = test.ports("0.0.0.0")
+    print(result)
