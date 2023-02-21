@@ -49,14 +49,9 @@ class network_tools:
 
         return self.ports
 
-    def monitor(self):
-        Packet_Sniffer(self.ports)
-
 class Packet_Sniffer:
 
     def __init__(self, localports):
-
-        data_tab = '\t\t\t '
 
         self.localports = localports
         
@@ -88,7 +83,7 @@ class Packet_Sniffer:
                         continue
 
             else:
-                print(f"Data:\n {self.format_multi_line(data_tab, data)}")
+                pass
 
     def ethernet_frame(self, data):
         dest_mac, src_mac, proto = struct.unpack('! 6s 6s H', data[:14])
@@ -137,7 +132,9 @@ class Packet_Sniffer:
 class Client:
 
     def __init__(self):
-        pass
+        self.Firewall = Firewall()
+
+        self.handler()
 
     def handler(self):
         while True:
@@ -188,8 +185,23 @@ class Firewall:
         self.monitoring = threading.Thread(target=Packet_Sniffer(), args=(self.localports,))
         self.monitoring.start()
 
-        self.UI = threading.Thread(target=Client, args=())
-        self.UI.start()
+    def ban_port(self, port):
+        pass
+
+    def ban_ip(self, ip):
+        pass
+
+    def ban_url(self, url):
+        pass
+
+    def unban_port(self, port):
+        pass
+    
+    def unban_ip(self, ip):
+        pass
+    
+    def unban_url(self, url):
+        pass
                 
 if __name__ == "__main__":
-    Firewall()
+    Client()
