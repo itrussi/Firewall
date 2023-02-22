@@ -1,4 +1,5 @@
 import scapy.all as scapy
+from netfilterqueue import NetfilterQueue
 import socket
 import struct
 import textwrap
@@ -50,10 +51,10 @@ class network_tools:
 
         return self.ports
 
-    def monitor(self, target):
+    def url(self, target):
         try:
             url = socket.gethostbyaddr(target)
-            safe = check(url[1])
+            safe = check(url[2])
         except:
             pass
 
@@ -62,7 +63,7 @@ class network_tools:
 
         else:
             print("Safe")
-
+    
 class Packet_Sniffer:
 
     def __init__(self, localports):
@@ -148,42 +149,85 @@ class Client:
     def __init__(self):
         self.Firewall = Firewall()
 
+        HOST = "0.0.0.0"
+        PORT = 8080
+        
+        self.client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.client.connect((HOST, PORT))
+
+        instruction_1 = self.client.recv(1024).decode('utf-8')
+        if instruction_1 == "UNAME":
+            username = input("Username:: ")
+            self.client.send(username.encode('utf-8'))
+
+            instruction_2 = self.client.recv(1024).decode('utf-8')
+            if instruction_2 == "PSWD":
+                password = input("Password:: ")
+                self.client.send(password.encode('utf-8'))
+
+                response = self.client.recv(1024).decode('utf-8')
+                if response == "Connected to Server!":
+                    self.handler()
+                else:
+                    raise Exception("Server Refused Connection")
+
+            elif instruction_2 == "REFUSE":
+                raise Exception("Server Refused Connection")
+                
+            else:
+                raise Exception("Server Connection Issue")
+
+        else:
+            raise Exception("Server Connection Issue")
+        
         self.handler()
 
     def handler(self):
+
         while True:
-            command = input(">>> ")
+            msg = command = input(">>> ")
 
             if command == "help":
                 print("Available commands:\n Block Port <port>,\n Block IP <IP>,\n Block URL <URL>,\n Unblock Port <port>,\n Unblock IP <IP>,\n Unblock URL <URL>,\n Monitor Port <port>,\n Stop Monitoring Port <port>")
 
             if "Block Port" in command:
-                print("Block Port")
+                port = command[11:]
+                self.Firewall.ban_port(port, self.client)
                 
             elif "Block IP" in command:
-                print("Block IP")
+                ip = command[9:]
+                self.Firewall.ban_ip(ip, self.client)
                 
             elif "Block URL" in command:
-                print("Block URL")
+                url = command[10:]
+                self.Firewall.ban_url(url, self.client)
                 
             elif "Unblock Port" in command:
-                print("Unblock Port")
+                port = command[11:]
+                self.Firewall.unban_port(port, self.client)
                 
             elif "Unblock IP" in command:
-                print("Unblock IP")
+                ip = command[9:]
+                self.Firewall.unban_ip(ip, self.client)
                 
             elif "Unblock URL" in command:
-                print("Unblock URL")
+                url = command[10:]
+                self.Firewall.ban_url(url, self.client)
 
             elif "Monitor Port" in command:
-                print("Unblock Port")
+                port = command[13:]
+                self.Firewall.monitor_port(port, self.client)
                 
             elif "Stop Monitoring Port" in command:
-                print("Stop Monitoring Port")
+                port = command[21:]
+                self.Firewall.unmonitor_port(port, self.client)
+
+            else:
+                self.client.send(msg.encode('utf-8'))
 
 class Firewall:
 
-    def __init__(self):
+    def __init__(self, pkt):
 
         logging.basicConfig(
             filename='./Logs/main.log',
@@ -194,28 +238,196 @@ class Firewall:
         
         self.logger = logging.getLogger(__name__)
 
+        self.nfqueue = NetfilterQueue()
+
         self.network_tools = network_tools()
         self.localports = self.network_tools.scanner("0.0.0.0")
         self.monitoring = threading.Thread(target=Packet_Sniffer(), args=(self.localports,))
         self.monitoring.start()
 
-    def ban_port(self, port):
-        pass
+        self.banned_ports = []
+        self.banned_prefixs = []
+        self.banned_ips = []
+        self.banned_urls = []
 
-    def ban_ip(self, ip):
-        pass
+        for port in self.localports:
+            if port.banned == True:
+                self.banned_ports.apped(port)
 
-    def ban_url(self, url):
-        pass
+        start_firewall = threading.Thread(target=self.firewall_start(), args=())
+        start_firewall.start()
 
-    def unban_port(self, port):
-        pass
+    def start_firewall(self):
+        self.nfqueue.bind(1, self.firewall())
+        
+        try:
+            self.nfqueue.run()
+        except KeyboardInterrupt:
+        	pass
+        
+        self.nfqueue.unbind()
+
+    def restart_firewall(self):
+        self.nfqueue.unbind()
+        self.start_firewall()
+
+    def firewall(self, pkt):
+
+        sca = IP(pkt.get_payload())
+        
+        if(sca.haslayer(TCP)):
+            t = sca.getlayer(TCP)
+            if(t.dport in self.banned_ports):
+                print(t.dport, "is a destination port that is blocked by the firewall.")
+                pkt.drop()
+
+        if(sca.haslayer(UDP)):
+            t = sca.getlayer(UDP)
+            if(t.dport in self.banned_ports):
+                print(t.dport, "is a destination port that is blocked by the firewall.")
+                pkt.drop()
+
+        if(sca.src in self.banned_ips):
+            print(sca.src, "is a incoming IP address that is banned by the firewall.")
+            pkt.drop()
+
+        try:
+            url = self.network_tools.url(sca.dst)
+            result = check(url)
+
+            for url in self.banned_urls:
+                if url == result:
+                    print(sca.dst, "is an url that is banned by the firewall.")
+                    pkt.drop()
+
+        except:
+            pass
+        
+        if(sca.dst in self.banned_ips):
+            print(sca.dst, "is a outband IP address that is banned by the firewall.")
+            pkt.drop()
+
+        if(sca.src in self.banned_ips):
+            print(sca.src, "is an imbound IP address that is banned by the firewall.")
+            pkt.drop()
+
+        if(True in [sca.src.find(suff)==0 for suff in self.banned_prefixs]):
+            print("Prefix of " + sca.src + " is banned by the firewall.")
+            pkt.drop()
     
-    def unban_ip(self, ip):
-        pass
+    def ban_port(self, client, port):
+        if port in self.banned_ports:
+            return "Port already banned"
+
+        elif port not in self.banned_ports:
+
+            client.send(f"Ban Port {port}".encode('utf-8'))
+            recv_data = client.recv(1024).decode('utf-8')
+
+            if recv_data == True:
+                self.banned_ports.append(port)
+                self.restart_firewall()
+
+                return "Successfull"
+
+            else:
+                return "Unsuccessfull"
+
+    def ban_ip(self, client, ip):
+        if ip in self.banned_ips:
+            return "IP already banned"
+
+        elif ip not in self.banned_ips:
+
+            client.send(f"Ban IP {ip}".encode('utf-8'))
+            recv_data = client.recv(1024).decode('utf-8')
+
+            if recv_data == True:
+                self.banned_ips.append(ip)
+                self.restart_firewall()
+
+                return "Successfull"
+
+            else:
+                return "Unsuccessfull"
+
+    def ban_url(self, client, url):
+        if url in self.banned_urls:
+            return "URL already banned"
+
+        elif url not in self.banned_urls:
+            
+            client.send(f"Ban URL {url}".encode('utf-8'))
+            recv_data = client.recv(1024).decode('utf-8')
+
+            if recv_data == True:
+                self.banned_urls.append(url)
+                self.restart_firewall()
+
+                return "Successfull"
+                
+            else:
+                return "Unsuccessfull"
+
+    def unban_port(self, client, port):
+        if port not in self.banned_ports:
+            return "Port already unblocked"
+
+        elif port in self.banned_ports:
+            client.send(f"Unban Port {port}".encode('utf-8'))
+            recv_data = client.recv(1024).decode('utf-8')
+
+            if recv_data == True:
+                self.banned_ports.remove(port)
+                self.restart_firewall()
+
+                return "Successfull"
+
+            else:
+                return "Unsuccessfull"
     
-    def unban_url(self, url):
-        pass
+    def unban_ip(self, client, ip):
+        if ip not in self.banned_ips:
+            return "IP already unblocked"
+
+        elif ip in self.banned_ips:
+
+            client.send(f"Unban IP {ip}".encode('utf-8'))
+            recv_data = client.recv(1024).decode('utf-8')
+
+            if recv_data == True:
+                self.banned_ips.remove(ip)
+                self.restart_firewall()
+
+                return "Successfull"
+
+            else:
+                return "Unsuccessfull"
+    
+    def unban_url(self, client, url):
+        if url not in self.banned_urls:
+            return "URL already unblocked"
+
+        elif url in self.banned_urls:
+            client.send(f"Unban Url: {url}".encode('utf-8'))
+            recv_data = client.recv(1024).decode('utf-8')
+
+            if recv_data == True:
+                self.banned_urls.remove(url)
+                self.restart_firewall()
+
+                return "Successfull"
+
+            else:
+                return "Unsuccessfull"
                 
 if __name__ == "__main__":
-    Client()
+    nfqueue = NetfilterQueue()
+    nfqueue.bind(1, Firewall)
+    
+    try:
+        nfqueue.run()
+    except KeyboardInterrupt:
+    	pass
+    
+    nfqueue.unbind()
